@@ -1,0 +1,592 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GrocerMetrics — Sales Forecast</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        .forecast-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .control-group label {
+            color: #e8e9ea;
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .control-group input[type="range"] {
+            width: 200px;
+            height: 4px;
+            background: #2a2d35;
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #d4f23a;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(212, 242, 58, 0.4);
+        }
+        
+        .control-group input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #d4f23a;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 8px rgba(212, 242, 58, 0.4);
+        }
+        
+        .forecast-value {
+            color: #d4f23a;
+            font-family: 'DM Mono', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            min-width: 60px;
+        }
+        
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            margin-bottom: 40px;
+        }
+        
+        .chart-container-small {
+            position: relative;
+            width: 100%;
+            height: 350px;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #6b7280;
+            padding: 20px;
+            font-size: 13px;
+        }
+        
+        .error-message {
+            color: #ff6b6b;
+            padding: 15px;
+            background: rgba(255, 107, 107, 0.1);
+            border-left: 3px solid #ff6b6b;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        canvas {
+            background: transparent !important;
+        }
+
+        .chart-container canvas,
+        .chart-container-small canvas {
+            background: transparent !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="grain-overlay"></div>
+
+    <nav class="nav">
+        <a href="/" class="nav-logo">Grocer<span>Metrics</span></a>
+        <div class="nav-links">
+            <a href="/" class="nav-link">Predict</a>
+            <a href="/forecast" class="nav-link active">Forecast</a>
+        </div>
+    </nav>
+
+    <div class="forecast-page">
+        <div class="forecast-header">
+            <div class="sidebar-tag">Live Charts</div>
+            <h1 class="forecast-title">Sales Forecast<br>&amp; Analytics</h1>
+            <p class="forecast-desc">30-day forward projection and product performance breakdown powered by time-series modeling.</p>
+        </div>
+
+        <div id="errorMessage"></div>
+
+        <div class="forecast-controls">
+            <div class="control-group">
+                <label for="forecastDays">Forecast Period</label>
+                <input 
+                    type="range" 
+                    id="forecastDays" 
+                    min="7" 
+                    max="90" 
+                    value="30" 
+                    step="1"
+                >
+                <span class="forecast-value"><span id="forecastValue">30</span> days</span>
+            </div>
+        </div>
+
+        <div class="charts-wrapper">
+            <div class="chart-block chart-full">
+                <div class="chart-label">
+                    <span class="chart-badge">ARIMA Model</span>
+                    <span id="forecastTitle">30-Day Sales Forecast</span>
+                </div>
+                <div class="chart-frame">
+                    <div class="loading" id="forecastLoading">Generating forecast...</div>
+                    <div class="chart-container">
+                        <canvas id="forecastChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-row-pair">
+                <div class="chart-block">
+                    <div class="chart-label">
+                        <span class="chart-badge">Rankings</span>
+                        Top 10 Selling Products
+                    </div>
+                    <div class="chart-frame">
+                        <div class="loading" id="topProductsLoading">Loading products...</div>
+                        <div class="chart-container-small">
+                            <canvas id="topProductsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-block">
+                    <div class="chart-label">
+                        <span class="chart-badge">Distribution</span>
+                        Sales Share (Top 10)
+                    </div>
+                    <div class="chart-frame">
+                        <div class="loading" id="pieLoading">Loading distribution...</div>
+                        <div class="chart-container-small">
+                            <canvas id="pieChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const THEME = {
+            bg: '#0e0f11',
+            surface: '#16181c',
+            surface2: '#1e2026',
+            border: '#2a2d35',
+            accent: '#d4f23a',
+            accent2: '#3af2c4',
+            muted: '#6b7280',
+            text: '#e8e9ea'
+        };
+
+        let forecastChart = null;
+        let topProductsChart = null;
+        let pieChart = null;
+
+        const forecastDaysInput = document.getElementById('forecastDays');
+        const forecastValueSpan = document.getElementById('forecastValue');
+        const forecastTitleSpan = document.getElementById('forecastTitle');
+        const errorMessageDiv = document.getElementById('errorMessage');
+
+        // Update forecast days display
+        forecastDaysInput.addEventListener('input', (e) => {
+            const days = e.target.value;
+            forecastValueSpan.textContent = days;
+            forecastTitleSpan.textContent = `${days}-Day Sales Forecast`;
+            updateForecasts();
+        });
+
+        function showError(message) {
+            errorMessageDiv.innerHTML = `<div class="error-message">${message}</div>`;
+            setTimeout(() => {
+                errorMessageDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        async function updateForecasts() {
+            const forecastDays = parseInt(forecastDaysInput.value);
+            
+            try {
+                const forecastResponse = await fetch('/api/forecast-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ forecastDays })
+                });
+
+                if (!forecastResponse.ok) {
+                    throw new Error(`HTTP ${forecastResponse.status}: ${forecastResponse.statusText}`);
+                }
+
+                const forecastData = await forecastResponse.json();
+                
+                if (forecastData.error) {
+                    throw new Error(forecastData.error);
+                }
+                
+                updateForecastChart(forecastData);
+
+            } catch (error) {
+                console.error('Forecast error:', error);
+                showError('Error generating forecast: ' + error.message);
+            }
+        }
+
+        function updateForecastChart(data) {
+            const ctx = document.getElementById('forecastChart').getContext('2d');
+            
+            
+            document.getElementById('forecastLoading').style.display = 'none';
+
+            const historicalDates = data.historical.dates;
+            const historicalValues = data.historical.values;
+            const forecastDates = data.forecast.dates;
+            const forecastValues = data.forecast.values;
+            const upperCI = data.forecast.upper;
+            const lowerCI = data.forecast.lower;
+
+            
+            const allDates = [...historicalDates, ...forecastDates];
+            
+            
+            const gradientLower = [];
+            const gradientUpper = [];
+            
+            for (let i = 0; i < allDates.length; i++) {
+                if (i < historicalDates.length) {
+                    gradientLower.push(null);
+                    gradientUpper.push(null);
+                } else {
+                    const idx = i - historicalDates.length;
+                    gradientLower.push(lowerCI[idx]);
+                    gradientUpper.push(upperCI[idx]);
+                }
+            }
+
+            if (forecastChart) {
+                forecastChart.destroy();
+            }
+
+            forecastChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: allDates,
+                    datasets: [
+                        {
+                            label: 'Historical Sales',
+                            data: [...historicalValues, ...Array(forecastDates.length).fill(null)],
+                            borderColor: THEME.accent,
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.4,
+                            borderDash: [],
+                            fill: false
+                        },
+                        {
+                            label: 'Forecast',
+                            data: [...Array(historicalDates.length).fill(null), ...forecastValues],
+                            borderColor: THEME.accent2,
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            tension: 0.4,
+                            fill: false
+                        },
+                        {
+                            label: 'Upper Confidence (95%)',
+                            data: gradientUpper,
+                            borderColor: 'transparent',
+                            backgroundColor: 'transparent',
+                            borderWidth: 0,
+                            fill: false,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Lower Confidence (95%)',
+                            data: gradientLower,
+                            borderColor: 'transparent',
+                            backgroundColor: THEME.accent2,
+                            borderWidth: 0,
+                            fill: '-1',
+                            fillOpacity: 0.12,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: THEME.text,
+                                font: { size: 11, weight: '500' },
+                                padding: 15,
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: THEME.surface2,
+                            borderColor: THEME.border,
+                            borderWidth: 1,
+                            titleColor: THEME.text,
+                            bodyColor: THEME.muted,
+                            padding: 10,
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.raw !== null) {
+                                        return context.dataset.label + ': ' + Math.round(context.raw) + ' units';
+                                    }
+                                    return '';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: {
+                                color: THEME.surface2,
+                                lineWidth: 0.7,
+                                drawBorder: true,
+                                borderColor: THEME.border
+                            },
+                            ticks: {
+                                color: THEME.muted,
+                                font: { size: 10 },
+                                maxRotation: 45,
+                                minRotation: 0
+                            }
+                        },
+                        y: {
+                            display: true,
+                            grid: {
+                                color: THEME.surface2,
+                                lineWidth: 0.7
+                            },
+                            ticks: {
+                                color: THEME.muted,
+                                font: { size: 10 }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Units Sold',
+                                color: THEME.muted,
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadTopProducts() {
+            try {
+                const response = await fetch('/api/top-products?topN=10');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                updateTopProductsChart(data);
+                updatePieChart(data);
+
+                document.getElementById('topProductsLoading').style.display = 'none';
+                document.getElementById('pieLoading').style.display = 'none';
+
+            } catch (error) {
+                console.error('Error loading top products:', error);
+                showError('Error loading products: ' + error.message);
+            }
+        }
+
+        function lerpHex(c1, c2, t) {
+            const parse = (h) => {
+                h = h.substring(1);
+                return [
+                    parseInt(h.substring(0, 2), 16),
+                    parseInt(h.substring(2, 4), 16),
+                    parseInt(h.substring(4, 6), 16)
+                ];
+            };
+            const [r1, g1, b1] = parse(c1);
+            const [r2, g2, b2] = parse(c2);
+            const r = Math.round(r1 + (r2 - r1) * t);
+            const g = Math.round(g1 + (g2 - g1) * t);
+            const b = Math.round(b1 + (b2 - b1) * t);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function generateGradient(c1, c2, steps) {
+            const colors = [];
+            for (let i = 0; i < steps; i++) {
+                colors.push(lerpHex(c1, c2, i / Math.max(steps - 1, 1)));
+            }
+            return colors;
+        }
+
+        function updateTopProductsChart(data) {
+            const ctx = document.getElementById('topProductsChart').getContext('2d');
+            const gradient = generateGradient(THEME.accent, THEME.accent2, data.products.length);
+
+            if (topProductsChart) {
+                topProductsChart.destroy();
+            }
+
+            topProductsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.products,
+                    datasets: [{
+                        label: 'Units Sold',
+                        data: data.quantities,
+                        backgroundColor: gradient,
+                        borderColor: 'transparent',
+                        borderRadius: 4,
+                        barThickness: 'flex'
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: THEME.surface2,
+                            borderColor: THEME.border,
+                            borderWidth: 1,
+                            titleColor: THEME.text,
+                            bodyColor: THEME.muted,
+                            padding: 10,
+                            callbacks: {
+                                label: function(context) {
+                                    return Math.round(context.raw) + ' units';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: {
+                                color: THEME.surface2,
+                                lineWidth: 0.7
+                            },
+                            ticks: {
+                                color: THEME.muted,
+                                font: { size: 10 }
+                            }
+                        },
+                        y: {
+                            display: true,
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: THEME.muted,
+                                font: { size: 10 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updatePieChart(data) {
+            const ctx = document.getElementById('pieChart').getContext('2d');
+            const gradient = generateGradient(THEME.accent, THEME.accent2, data.products.length);
+
+            if (pieChart) {
+                pieChart.destroy();
+            }
+
+            pieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.products,
+                    datasets: [{
+                        data: data.quantities,
+                        backgroundColor: gradient,
+                        borderColor: THEME.surface,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'right',
+                            labels: {
+                                color: THEME.text,
+                                font: { size: 9 },
+                                padding: 10,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: THEME.surface2,
+                            borderColor: THEME.border,
+                            borderWidth: 1,
+                            titleColor: THEME.text,
+                            bodyColor: THEME.muted,
+                            padding: 10,
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.raw / total) * 100).toFixed(1);
+                                    return Math.round(context.raw) + ' units (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateForecasts();
+            loadTopProducts();
+        });
+    </script>
+</body>
+</html>

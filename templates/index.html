@@ -1,0 +1,136 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GrocerMetrics — Prediction</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="grain-overlay"></div>
+
+    <nav class="nav">
+        <a href="/" class="nav-logo">Grocer<span>Metrics</span></a>
+        <div class="nav-links">
+            <a href="/" class="nav-link active">Predict</a>
+            <a href="/forecast" class="nav-link">Forecast</a>
+        </div>
+    </nav>
+
+    <main class="main-layout">
+        <aside class="sidebar">
+            <div class="sidebar-tag">AI-Powered</div>
+            <h1 class="sidebar-title">Sales<br>Prediction<br>Engine</h1>
+            <p class="sidebar-desc">Enter product details to get instant profit predictions, restock timing, and smart product recommendations.</p>
+            <div class="sidebar-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-products">—</span>
+                    <span class="stat-label">Products in DB</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">MBA</span>
+                    <span class="stat-label">Algorithm</span>
+                </div>
+            </div>
+        </aside>
+
+        <section class="content-area">
+            <div class="card form-card">
+                <div class="card-header">
+                    <span class="card-tag">Input</span>
+                    <h2 class="card-title">Product Parameters</h2>
+                </div>
+
+                <form id="predict-form" novalidate>
+                    <div class="field-group">
+                        <label class="field-label" for="Description">Product Description</label>
+                        <div class="select-wrapper">
+                            <select id="Description" name="Description" required>
+                                <option value="" disabled selected>Select a product…</option>
+                                {% for product in products %}
+                                    <option value="{{ product }}">{{ product }}</option>
+                                {% endfor %}
+                            </select>
+                            <span class="select-arrow">↓</span>
+                        </div>
+                    </div>
+
+                    <div class="fields-row">
+                        <div class="field-group">
+                            <label class="field-label" for="Quantity">Quantity</label>
+                            <input type="number" id="Quantity" name="Quantity" step="any" min="0" placeholder="e.g. 50" required>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label" for="UnitPrice">Unit Price (£)</label>
+                            <input type="number" id="UnitPrice" name="UnitPrice" step="any" min="0" placeholder="e.g. 2.50" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-predict" id="submit-btn">
+                        <span class="btn-text">Run Prediction</span>
+                        <span class="btn-icon">→</span>
+                        <div class="btn-loader" id="btn-loader"></div>
+                    </button>
+                </form>
+
+                <div id="error-box" class="error-box" style="display:none;"></div>
+            </div>
+
+            <div id="results" class="results-grid" style="display:none;">
+                <div class="result-card highlight-card">
+                    <div class="result-label">Profit Prediction</div>
+                    <div class="result-value" id="profit-result">—</div>
+                    <div class="result-sub">estimated revenue</div>
+                </div>
+
+                <div class="result-card">
+                    <div class="result-label">Days to Sell</div>
+                    <div class="result-value" id="days-to-sell">—</div>
+                    <div class="result-sub">based on avg. velocity</div>
+                </div>
+
+                <div class="result-card">
+                    <div class="result-label">Purchase Probability</div>
+                    <div class="result-value" id="purchase-probability">—</div>
+                    <div class="result-sub">share of total sales</div>
+                </div>
+
+                <div class="result-card wide-card">
+                    <div class="result-label">Recommended Cross-Sells</div>
+                    <div id="recommendations-list" class="reco-list"></div>
+                </div>
+
+                <div class="result-card chart-card">
+                    <div class="result-label">Profit Analysis</div>
+                    <div class="chart-container-prediction">
+                        <canvas id="profitChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="result-card chart-card">
+                    <div class="result-label">Price vs Quantity Impact</div>
+                    <div class="chart-container-prediction">
+                        <canvas id="impactChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="result-card chart-card">
+                    <div class="result-label">Product Ranking</div>
+                    <div class="chart-container-prediction">
+                        <canvas id="rankingChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/scripts.js"></script>
+    <script>
+        const opts = document.querySelectorAll('#Description option[value]').length;
+        document.getElementById('stat-products').textContent = opts > 0 ? opts.toLocaleString() : '—';
+    </script>
+</body>
+</html>
