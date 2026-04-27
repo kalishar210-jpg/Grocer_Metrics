@@ -1,5 +1,5 @@
 
-## Grocer_Metrics 🛒📊🤖
+## Grocer_Metrics 
 
 Grocer_Metrics is a data-driven project that applies "data mining and machine learning techniques" to analyze grocery transaction patterns and forecast demand. It combines the "priori Algorithm" for association rule mining and the "ARIMA model" for time-series forecasting.
 
@@ -44,6 +44,6 @@ Grocer_Metrics/
 1. Clone the repository
   git clone https://github.com/kalishar210-jpg/Grocer_Metrics.git
 2. Install dependencies
-  pip install -r requirements.txt
+  pip install -r requirements.txt [based  on version]
 3. Run the project
-  python app.py
+  python app.py [version]
