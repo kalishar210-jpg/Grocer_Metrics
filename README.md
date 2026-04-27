@@ -1,7 +1,6 @@
+#Grocer_Metrics
 
-## Grocer_Metrics 
-
-Grocer_Metrics is a data-driven project that applies "data mining and machine learning techniques" to analyze grocery transaction patterns and forecast demand. It combines the "priori Algorithm" for association rule mining and the "ARIMA model" for time-series forecasting.
+-Grocer_Metrics is a data-driven project that applies "data mining and machine learning techniques" to analyze grocery transaction patterns and forecast demand. It combines the "priori Algorithm" for association rule mining and the "ARIMA model" for time-series forecasting.
 
 ## Project Objectives
 - Discover frequent itemsets using "Apriori Algorithm"
