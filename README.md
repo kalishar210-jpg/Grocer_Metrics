@@ -17,7 +17,7 @@
 ### Machine Learning / AI
 - ARIMA Model (Time Series Forecasting)
 
-### Tools & Libraries (update if needed)
+### Tools & Libraries 
 - Python
 - Pandas
 - NumPy
